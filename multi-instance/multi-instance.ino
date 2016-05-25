@@ -1,7 +1,7 @@
 
 #include <Wire.h>
-#include <SPI.h>
-#include <Adafruit_PN532.h>
+#include <PN532_I2C.h>
+#include "PN532.h"
 
 // If using the breakout with SPI, define the pins for SPI communication.
 #define PN532_SCK  (2)
@@ -27,8 +27,9 @@
 //Adafruit_PN532 nfc(PN532_SS);
 
 // Or use this line for a breakout or shield with an I2C connection:
-Adafruit_PN532 nfc(PN532_IRQ, PN532_RESET);
-
+//Adafruit_PN532 nfc(PN532_IRQ, PN532_RESET);
+PN532_I2C pn532i2c(Wire);
+PN532 nfc(pn532i2c);
 #if defined(ARDUINO_ARCH_SAMD)
 // for Zero, output on USB Serial console, remove line below if using programming port to program the Zero!
 // also change #define in Adafruit_PN532.cpp library file
@@ -79,9 +80,15 @@ void setup()
   Serial.print("Firmware ver. "); Serial.print((versiondata>>16) & 0xFF, DEC);
   Serial.print('.'); Serial.println((versiondata>>8) & 0xFF, DEC);
 
+<<<<<<< Updated upstream
   // configure board to read RFID tags
   nfc.SAMConfig();
   nfc.setPassiveActivationRetries(0x01); 
+=======
+	// configure board to read RFID tags
+  nfc.setPassiveActivationRetries(0x01);  
+	nfc.SAMConfig();
+>>>>>>> Stashed changes
 
   Serial.println("Waiting for an ISO14443A Card ...");
 
@@ -128,6 +135,7 @@ void setup()
 void loop()
 {
 
+<<<<<<< Updated upstream
   // RFID CODE
   // Wait for an ISO14443A type cards (Mifare, etc.).  When one is found
   // 'uid' will be populated with the UID, and uidLength will indicate
@@ -165,6 +173,42 @@ void loop()
 
   //PEDAL SHIELD CODE
   //Read the ADCs
+=======
+	// RFID CODE
+	// Wait for an ISO14443A type cards (Mifare, etc.).  When one is found
+	// 'uid' will be populated with the UID, and uidLength will indicate
+	// if the uid is 4 bytes (Mifare Classic) or 7 bytes (Mifare Ultralight)
+	success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength, 1000);
+
+	if (success) {
+		// Display some basic information about the card
+		Serial.println("Found an ISO14443A card");
+		Serial.print("  UID Length: ");Serial.print(uidLength, DEC);Serial.println(" bytes");
+		Serial.print("  UID Value: ");
+		nfc.PrintHex(uid, uidLength);
+		Serial.println("");
+
+		//0xF0 0x1B 0xC6 0xDE
+		if (uid[0] == 0xF0 &&
+				uid[1] == 0x1B &&
+				uid[2] == 0xC6 &&
+				uid[3] == 0xDE) {
+			Serial.println("keychain tag read 2");
+			effect = 2;
+			Serial.println(effect);
+		}
+		//0x82 0xA9 0x40 0xF2
+		if (uid[0] == 0x82 &&
+				uid[1] == 0xA9 &&
+				uid[2] == 0x40 &&
+				uid[3] == 0xF2) {
+			Serial.println("card tag read 1");
+			effect = 1;
+			Serial.println(effect);
+		}
+
+	}
+>>>>>>> Stashed changes
 
 }
 
@@ -177,6 +221,7 @@ void TC4_Handler()
   POT0=ADC->ADC_CDR[10];                   // read data from ADC8
   POT1=ADC->ADC_CDR[11];                   // read data from ADC9
   POT2=ADC->ADC_CDR[12];                   // read data from ADC10
+<<<<<<< Updated upstream
   //digitalWrite(13, HIGH);   // turn the LED on (HIGH is the voltage level)
   //delay(1000);              // wait for a second
   //digitalWrite(13, LOW);    // turn the LED off by making the voltage LOW
@@ -287,6 +332,114 @@ void TC4_Handler()
     dacc_write_conversion_data(DACC_INTERFACE, 0);       //write on DAC
 
   }}
+=======
+
+	// We need to get the status to clear it and allow the interrupt to fire again
+	TC_GetStatus(TC1, 1);
+
+	if (effect==0) // EFFECT 0: Volume-Booster
+	{
+		digitalWrite(LED, HIGH);
+		//Adjust the volume with POT2
+		out_DAC0=map(in_ADC0,0,4095,1,POT2);
+		out_DAC1=map(in_ADC1,0,4095,1,POT2);
+
+		//Write the DACs
+		dacc_set_channel_selection(DACC_INTERFACE, 0);          //select DAC channel 0
+		dacc_write_conversion_data(DACC_INTERFACE, out_DAC0);//write on DAC
+		dacc_set_channel_selection(DACC_INTERFACE, 1);          //select DAC channel 1
+		dacc_write_conversion_data(DACC_INTERFACE, out_DAC1);//write on DAC
+	}
+
+
+	else if (effect==1)  // EFFECT 1: Asymmetric Distortion
+	{
+		digitalWrite(LED, LOW);
+		upper_threshold=map(POT0,0,4095,4095,2047);
+		lower_threshold=map(POT1,0,4095,0000,2047);
+
+		if(in_ADC0>=upper_threshold) in_ADC0=upper_threshold;
+		else if(in_ADC0<lower_threshold)  in_ADC0=lower_threshold;
+
+		if(in_ADC1>=upper_threshold) in_ADC1=upper_threshold;
+		else if(in_ADC1<lower_threshold)  in_ADC1=lower_threshold;
+
+		//adjust the volume with POT2
+		out_DAC0=map(in_ADC0,0,4095,1,POT2);
+		out_DAC1=map(in_ADC1,0,4095,1,POT2);
+
+		//Write the DACs
+		dacc_set_channel_selection(DACC_INTERFACE, 0);          //select DAC channel 0
+		dacc_write_conversion_data(DACC_INTERFACE, out_DAC0);//write on DAC
+		dacc_set_channel_selection(DACC_INTERFACE, 1);          //select DAC channel 1
+		dacc_write_conversion_data(DACC_INTERFACE, out_DAC1);//write on DAC
+	}
+	else if (effect==2) // EFFECT 2: Echo.
+	{
+		digitalWrite(LED, LOW);
+		//Store current readings
+		sDelayBuffer0[DelayCounter]  = (in_ADC0 + (sDelayBuffer0[DelayCounter]))>>1;
+
+		//Adjust Delay Depth based in pot0 position.
+		Delay_Depth =map(POT0>>2,0,2047,1,40000);
+
+		//Increse/reset delay counter.
+		DelayCounter++;
+		if(DelayCounter >= Delay_Depth) DelayCounter = 0;
+		out_DAC0 = ((sDelayBuffer0[DelayCounter]));
+
+		//Add volume feature based in POT2 position.
+		out_DAC0=map(out_DAC0,0,4095,1,POT2);
+
+		//Write the DACs
+		dacc_set_channel_selection(DACC_INTERFACE, 0);          //select DAC channel 0
+		dacc_write_conversion_data(DACC_INTERFACE, out_DAC0);//write on DAC
+		dacc_set_channel_selection(DACC_INTERFACE, 1);          //select DAC channel 1
+		dacc_write_conversion_data(DACC_INTERFACE, 0);          //write on DAC
+	}
+
+	else  // EFFECT 3: Chourus
+	{
+		digitalWrite(LED, LOW);
+		//Store current readings
+		sDelayBuffer0[DelayCounter] = in_ADC0;
+
+		//Adjust Delay Depth based in pot0 position.
+		POT0=map(POT0>>2,0,1024,1,25); //25 empirically chosen
+
+		DelayCounter++;
+		if(DelayCounter >= Delay_Depth)
+		{
+			DelayCounter = 0;
+			if(count_up)
+			{
+				digitalWrite(LED, HIGH);
+				for(p=0;p<POT0+1;p++)
+					sDelayBuffer0[Delay_Depth+p]=sDelayBuffer0[Delay_Depth-1];
+				Delay_Depth=Delay_Depth+POT0;
+				if (Delay_Depth>=MAX_DELAY)count_up=0;
+			}
+			else
+			{
+				digitalWrite(LED, LOW);
+				Delay_Depth=Delay_Depth-POT0;
+				if (Delay_Depth<=MIN_DELAY)count_up=1;
+			}
+		}
+
+		out_DAC0 = sDelayBuffer0[DelayCounter];
+
+		//Add volume control based in POT2
+		out_DAC0=map(out_DAC0,0,4095,1,POT2);
+
+		//Write the DACs
+		dacc_set_channel_selection(DACC_INTERFACE, 0);       //select DAC channel 0
+		dacc_write_conversion_data(DACC_INTERFACE, out_DAC0);//write on DAC
+		dacc_set_channel_selection(DACC_INTERFACE, 1);       //select DAC channel 1
+		dacc_write_conversion_data(DACC_INTERFACE, 0);       //write on DAC
+
+	}}
+>>>>>>> Stashed changes
 
 void switch_handler()
 {
